@@ -1,0 +1,12 @@
+{
+  "rust-analyzer.linkedProjects": [
+    ".\\src-tauri\\Cargo.toml",
+    ".\\src-tauri\\Cargo.toml",
+    ".\\src-tauri\\Cargo.toml",
+    ".\\src-tauri\\Cargo.toml",
+    ".\\src-tauri\\Cargo.toml",
+    ".\\src-tauri\\Cargo.toml"
+  ],
+  "editor.defaultFormatter": "jinxdash.prettier-rust",
+  "editor.formatOnSave": true
+}
