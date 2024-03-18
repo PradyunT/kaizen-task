@@ -1,15 +1,26 @@
 mod handlers;
 
-use std::{ env, panic, sync::Mutex };
+use actix_cors::Cors;
+
+// JWT
+use actix_jwt_auth_middleware::use_jwt::UseJWTOnApp;
+use actix_jwt_auth_middleware::{ Authority, TokenSigner };
+use jwt_compact::alg::Ed25519;
+
+use std::{ env, panic };
 use tauri::AppHandle;
-use actix_web::{ middleware, web, App, HttpServer };
+use actix_web::{ http::header, web, App, HttpServer };
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{ Pool, Postgres };
+
+use rand::rngs::OsRng;
+use ed25519_dalek::SigningKey;
+use ed25519_dalek::Signature;
+
+use self::handlers::users::UserClaims;
 struct TauriAppState {
     app: AppHandle,
     pool: Pool<Postgres>,
-    token: Option<String>,
-    logged_in: bool,
 }
 
 #[actix_web::main]
@@ -23,18 +34,44 @@ pub async fn init(app: AppHandle) -> Result<(), std::io::Error> {
     let pool = result.unwrap();
 
     // Initialize the app state
-    let tauri_app_state = web::Data::new(TauriAppState {
+    let tauri_app = web::Data::new(TauriAppState {
         app,
         pool,
-        token: None,
-        logged_in: false,
     });
 
+    let mut csprng = OsRng;
+    let signing_key: SigningKey = SigningKey::generate(&mut csprng);
+
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allowed_origin("http://localhost:3000")
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE])
+            .supports_credentials()
+            .max_age(3600);
+
+        let authority = Authority::<UserClaims, Ed25519, _, _>
+            ::new()
+            .refresh_authorizer(|| async move { Ok(()) })
+            .token_signer(
+                Some(
+                    TokenSigner::new()
+                        .signing_key(signing_key.clone())
+                        .algorithm(Ed25519)
+                        .build()
+                        .expect("")
+                )
+            )
+            .verifying_key(signing_key.verifying_key())
+            .build()
+            .expect("");
+
         App::new()
-            .app_data(tauri_app_state.clone()) // pass appstate to handler routes
-            .wrap(middleware::Logger::default())
-            .service(handlers::users::register_user)
+            .wrap(cors)
+            .app_data(tauri_app.clone()) // pass appstate to handler routes
+            .service(handlers::users::register)
+            .service(handlers::users::login)
+            .use_jwt(authority, web::scope(""))
     })
         .bind(("127.0.0.1", 4875))?
         .run().await

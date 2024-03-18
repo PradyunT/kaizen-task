@@ -26,6 +26,11 @@ reqwest = { version = "0.11.26", features = ["blocking", "json"] }
 thiserror = "1.0.58"
 argon2 = "0.5.3"
 anyhow = "1.0.81"
+actix-cors = "0.7.0"
+actix-jwt-auth-middleware = "0.3.0"
+jwt-compact = { version = "0.8.0", features = ["ed25519-dalek"] }
+ed25519-dalek = "2"
+rand = "0.8.5"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

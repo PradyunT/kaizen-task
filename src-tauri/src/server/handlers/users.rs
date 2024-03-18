@@ -1,14 +1,19 @@
-use crate::server;
+use std::sync::Mutex;
+
+use crate::{ server, AuthState };
 use anyhow;
+use jwt_compact::alg::Ed25519;
+use tauri::Manager;
 
 use actix_web::{ post, web, HttpResponse };
-use serde::Deserialize;
+use actix_jwt_auth_middleware::{ AuthResult, Authority, FromRequest, TokenSigner };
+use serde::{ Serialize, Deserialize };
 use argon2::{
     password_hash::{ rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString },
     Argon2,
 };
 use sqlx::{ Pool, Postgres };
-
+/// Represents the user data received from the client during registration.
 #[derive(Deserialize, Debug)]
 struct User {
     username: String,
@@ -16,15 +21,21 @@ struct User {
     password: String,
 }
 
-#[post("/auth/register_user")]
-pub async fn register_user(
+#[derive(Serialize, Deserialize, Clone, FromRequest)]
+pub struct UserClaims {
+    email: String,
+}
+
+/// Endpoint for registering a new user.
+#[post("/auth/register")]
+pub async fn register(
     data: web::Data<server::TauriAppState>,
     user: web::Json<User>
 ) -> HttpResponse {
-    // Get pool from appstate
+    // Get the database connection pool from the application state
     let pool = &data.pool;
 
-    // Get user's values from deserialized JSON
+    // Extract user data from the JSON payload
     let username = &user.username;
     let email = &user.email;
     let password = user.password.clone();
@@ -32,23 +43,46 @@ pub async fn register_user(
     // Hash the user's password
     let hashed_password = hash_user_password(password);
 
-    // Write sql query to store the registering user in the db
-    if let Err(_) = store_user(username, email, &hashed_password, pool).await {
-        HttpResponse::InternalServerError().body("Failed to store user into database");
+    // Attempt to store the user in the database
+    if let Err(err) = store_user(username, email, &hashed_password, pool).await {
+        let error_message: String;
+        let e = format!("{}", { err });
+        if e.contains("duplicate key value") {
+            error_message = "User with email already exists".to_string();
+        } else {
+            error_message = format!("Failed to store user into database: {}", e);
+        }
+
+        // Return an error response
+        return HttpResponse::InternalServerError().json(error_message);
     }
 
-    // Update the Authstate
-    // data.logged_in = true;
-    println!("User registered successfully");
-    HttpResponse::Ok().body("User registered successfully")
+    // Update the authentication state
+    let authstate_mutex = data.app.state::<Mutex<AuthState>>();
+    let mut state = authstate_mutex.lock().unwrap();
+    state.logged_in = true;
+
+    HttpResponse::Ok().json("User registered successfully")
 }
 
+#[post("/auth/login")]
+async fn login(cookie_signer: web::Data<TokenSigner<User, Ed25519>>) -> AuthResult<HttpResponse> {
+    let user = UserClaims { email: "example@gmail.com".to_string() };
+    Ok(
+        HttpResponse::Ok()
+            .cookie(cookie_signer.create_access_cookie(&user)?)
+            .cookie(cookie_signer.create_refresh_cookie(&user)?)
+            .body("You are now logged in")
+    )
+}
+/// Asynchronously stores a new user in the database.
 async fn store_user(
     username: &str,
     email: &str,
     hashed_password: &str,
     pool: &Pool<Postgres>
 ) -> anyhow::Result<()> {
+    // Execute SQL query to insert user into the database
     sqlx
         ::query("INSERT INTO users(username, email, password)
             VALUES($1, $2, $3)")
@@ -59,24 +93,29 @@ async fn store_user(
     Ok(())
 }
 
+/// Hashes the user's password using Argon2 algorithm.
 fn hash_user_password(password: String) -> String {
-    // Hash the user's password
+    // Convert password to bytes
     let password = password.as_bytes();
+    // Generate a random salt
     let salt = SaltString::generate(&mut OsRng);
 
-    // Argon2 with default params (Argon2id v19)
+    // Create an Argon2 password hasher
     let argon2 = Argon2::default();
 
-    // Hash password to PHC string ($argon2id$v=19$...)
+    // Hash the password
     let password_hash = argon2.hash_password(password, &salt).unwrap().to_string();
 
     password_hash
 }
 
+/// Verifies whether the provided password matches the hashed password.
 fn verify_password(password: String, hashed_password: String) -> bool {
-    // Verify password against PHC string.
+    // Convert password to bytes
     let password = password.as_bytes();
+    // Parse the hashed password
     let parsed_hash = PasswordHash::new(&hashed_password).unwrap();
+    // Verify the password
     Argon2::default().verify_password(password, &parsed_hash).is_ok()
 }
 
@@ -90,15 +129,4 @@ mod tests {
             "$argon2id$v=19$m=19456,t=2,p=1$mK1zp767ZDsSClJ8HP+qtw$uJdh3qZK9UKyNzL4kO1JSEA8mw0KoQ6YZ+oAId7PmY4".to_string();
         assert!(verify_password(password, hashed_password));
     }
-
-    // #[test]
-    // fn hash_one_password() {
-    //     let password = "password".to_string();
-    //     let salt = &SaltString::from_b64("iTta0GSrGaNDFUAvcUjzHg").unwrap();
-    //     let hashed_password = hash_user_password(password, salt);
-    //     assert_eq!(
-    //         hashed_password,
-    //         "$argon2id$v=19$m=19456,t=2,p=1$iTta0GSrGaNDFUAvcUjzHg$LrOIIudAGCX0dqmt3bOtheaVMI1+jnXNT5gGsjLFwpg".to_string()
-    //     );
-    // }
 }
