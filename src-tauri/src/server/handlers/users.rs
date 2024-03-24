@@ -2,11 +2,10 @@ use std::sync::Mutex;
 
 use crate::{ server, AuthState };
 use anyhow;
-use jwt_compact::alg::Ed25519;
+
 use tauri::Manager;
 
 use actix_web::{ post, web, HttpResponse };
-use actix_jwt_auth_middleware::{ AuthResult, Authority, FromRequest, TokenSigner };
 use serde::{ Serialize, Deserialize };
 use argon2::{
     password_hash::{ rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString },
@@ -15,13 +14,19 @@ use argon2::{
 use sqlx::{ Pool, Postgres };
 /// Represents the user data received from the client during registration.
 #[derive(Deserialize, Debug)]
-struct User {
+struct RegisterUser {
     username: String,
     email: String,
     password: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, FromRequest)]
+#[derive(Deserialize, Debug)]
+struct LoginUser {
+    username: String,
+    password: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct UserClaims {
     email: String,
 }
@@ -30,7 +35,7 @@ pub struct UserClaims {
 #[post("/auth/register")]
 pub async fn register(
     data: web::Data<server::TauriAppState>,
-    user: web::Json<User>
+    user: web::Json<RegisterUser>
 ) -> HttpResponse {
     // Get the database connection pool from the application state
     let pool = &data.pool;
@@ -66,15 +71,16 @@ pub async fn register(
 }
 
 #[post("/auth/login")]
-async fn login(cookie_signer: web::Data<TokenSigner<User, Ed25519>>) -> AuthResult<HttpResponse> {
+async fn login(user: web::Json<LoginUser>) -> HttpResponse {
+    // TODO Finish login logic
+    println!("Login was called! {:?}", user);
+    // Verify user's password
+    // Send OK response with token
     let user = UserClaims { email: "example@gmail.com".to_string() };
-    Ok(
-        HttpResponse::Ok()
-            .cookie(cookie_signer.create_access_cookie(&user)?)
-            .cookie(cookie_signer.create_refresh_cookie(&user)?)
-            .body("You are now logged in")
-    )
+
+    HttpResponse::Ok().body("You are now logged in")
 }
+
 /// Asynchronously stores a new user in the database.
 async fn store_user(
     username: &str,
