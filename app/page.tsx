@@ -9,8 +9,8 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToastAction } from "@/components/ui/toast"
-import { useToast } from "@/components/ui/use-toast"
+import { ToastAction } from "@/components/ui/toast";
+import { useToast } from "@/components/ui/use-toast";
 
 const registerFormSchema = z.object({
   username: z
@@ -27,8 +27,9 @@ const loginFormSchema = z.object({
 });
 
 export default function AuthPage() {
-  const { toast } = useToast()
+  const { toast } = useToast();
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const registerForm = useForm<z.infer<typeof registerFormSchema>>({
     resolver: zodResolver(registerFormSchema),
@@ -48,6 +49,7 @@ export default function AuthPage() {
   });
 
   function handleRegister(values: z.infer<typeof registerFormSchema>) {
+    setLoading(true);
     // Send POST request to server
     fetch("http://localhost:4875/auth/register", {
       method: "POST",
@@ -60,9 +62,10 @@ export default function AuthPage() {
         if (!response.ok) {
           return response.json().then((data) => {
             toast({
+              variant: "destructive",
               title: "Failed to register ❌",
-              description: `${data}`
-            })
+              description: `${data}`,
+            });
             setError(data); // Display the error message
             throw new Error("Failed to register user");
           });
@@ -72,8 +75,11 @@ export default function AuthPage() {
       .then((data) => {
         toast({
           title: "Registered Successfully ✅",
-        })
-        console.log(data);
+        });
+        // Set token in local storage
+        localStorage.setItem("token", data.token);
+        // Redirect to home page
+        window.location.replace("/home");
       })
       .catch((error) => {
         console.error(error);
@@ -81,6 +87,7 @@ export default function AuthPage() {
   }
 
   function handleLogin(values: z.infer<typeof loginFormSchema>) {
+    setLoading(true);
     // Send POST request to server
     fetch("http://localhost:4875/auth/login", {
       method: "POST",
@@ -93,9 +100,10 @@ export default function AuthPage() {
         if (!response.ok) {
           return response.json().then((data) => {
             toast({
+              variant: "destructive",
               title: "Failed to login ❌",
-              description: `${data}`
-            })
+              description: `${data}`,
+            });
             setError(data); // Display the error message
             throw new Error("Failed to login user");
           });
@@ -105,8 +113,11 @@ export default function AuthPage() {
       .then((data) => {
         toast({
           title: "Logged In Successfully ✅",
-        })
-        console.log(data);
+        });
+        // Set token in local storage
+        localStorage.setItem("token", data.token);
+        // Redirect to home page
+        window.location.replace("/home");
       })
       .catch((error) => {
         console.error(error);
@@ -114,8 +125,8 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-between p-24">
-      <h1>Auth Page</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center p-24">
+      <h1 className="h2 border-b pb-2 mb-4">Login</h1>
       <Tabs defaultValue="login" className="w-[400px]">
         <TabsList>
           <TabsTrigger value="login">Login</TabsTrigger>
@@ -123,7 +134,7 @@ export default function AuthPage() {
         </TabsList>
         <TabsContent value="login">
           <>
-            <h1 className="text-lg font-bold">Login</h1>
+            <h2 className="text-lg font-bold">Login</h2>
             <Form {...loginForm}>
               <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-8">
                 <FormField
@@ -133,7 +144,7 @@ export default function AuthPage() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="Kai.zen@gmail.com" {...field} />
+                        <Input placeholder="Kai.Zen@gmail.com" {...field} />
                       </FormControl>
                       <FormDescription>Your email.</FormDescription>
                       <FormMessage />
@@ -154,7 +165,9 @@ export default function AuthPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit">Login</Button>
+                <Button type="submit" disabled={loading}>
+                  Login
+                </Button>
                 <h1 className="text-md text-red-500">{error}</h1>
               </form>
             </Form>{" "}
@@ -207,7 +220,9 @@ export default function AuthPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit">Register</Button>
+                <Button type="submit" disabled={loading}>
+                  Register
+                </Button>
                 <h1 className="text-md text-red-500">{error}</h1>
               </form>
             </Form>{" "}

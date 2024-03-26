@@ -8,5 +8,8 @@
     ".\\src-tauri\\Cargo.toml"
   ],
   "editor.defaultFormatter": "jinxdash.prettier-rust",
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
 }

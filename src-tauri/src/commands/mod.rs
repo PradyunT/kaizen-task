@@ -18,32 +18,6 @@ impl serde::Serialize for Error {
     }
 }
 
-// #[tauri::command]
-// pub async fn handle_register_user(
-//     username: String,
-//     email: String,
-//     password: String
-// ) -> Result<bool, Error> {
-//     // Send POST request to server
-//     let mut map = HashMap::new();
-//     map.insert("username", username);
-//     map.insert("email", email);
-//     map.insert("password", password);
-
-//     let client = reqwest::Client::new();
-//     let res = client
-//         .post("http://localhost:4875/auth/register_user")
-//         .json(&map)
-//         .send().await
-//         .map_err(Error::Request)?;
-
-//     if res.status().is_success() {
-//         Ok(true)
-//     } else {
-//         Err(Error::Server())
-//     }
-// }
-
 #[tauri::command]
 pub fn is_authorized(state_mutex: State<'_, Mutex<AuthState>>) -> bool {
     let state = state_mutex.lock().unwrap();
