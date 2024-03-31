@@ -1,29 +1,24 @@
 "use client";
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/components/ui/use-toast";
+import { hasCookie, setCookie } from "cookies-next";
 
 const registerFormSchema = z.object({
-  username: z
-    .string()
-    .min(2, { message: "Username must be at least 2 characters" })
-    .max(50, { message: "Username must be less than 50 characters" }),
+  username: z.string().min(2).max(50),
   email: z.string().min(2),
-  password: z.string().min(8, { message: "Password must be at least 8 characters" }),
+  password: z.string().min(8),
 });
 
 const loginFormSchema = z.object({
   email: z.string().min(2),
-  password: z.string().min(3, { message: "Password must be at least 3 characters" }),
+  password: z.string().min(3),
 });
 
 export default function AuthPage() {
@@ -31,97 +26,89 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const checkAuth = () => {
+      console.log("Checking auth!");
+      if (hasCookie("token")) {
+        window.location.replace("/home");
+      }
+    };
+    checkAuth();
+  }, []);
+
   const registerForm = useForm<z.infer<typeof registerFormSchema>>({
     resolver: zodResolver(registerFormSchema),
-    defaultValues: {
-      username: "",
-      email: "",
-      password: "",
-    },
+    defaultValues: { username: "", email: "", password: "" },
   });
 
   const loginForm = useForm<z.infer<typeof loginFormSchema>>({
     resolver: zodResolver(loginFormSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
+
+  function handleResponse(response: Response) {
+    return response.ok
+      ? response.json()
+      : response.json().then((data) => {
+          throw new Error(data);
+        });
+  }
 
   function handleRegister(values: z.infer<typeof registerFormSchema>) {
     setLoading(true);
-    // Send POST request to server
     fetch("http://localhost:4875/auth/register", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     })
-      .then((response) => {
-        if (!response.ok) {
-          return response.json().then((data) => {
-            toast({
-              variant: "destructive",
-              title: "Failed to register ❌",
-              description: `${data}`,
-            });
-            setError(data); // Display the error message
-            throw new Error("Failed to register user");
-          });
-        }
-        return response.json();
-      })
+      .then(handleResponse)
       .then((data) => {
-        toast({
-          title: "Registered Successfully ✅",
-        });
-        // Set token in local storage
-        localStorage.setItem("token", data.token);
-        // Redirect to home page
-        window.location.replace("/home");
+        toast({ title: "Registered Successfully ✅" });
+        setCookiesAndRedirect(data);
+        setLoading(false); // Move setLoading inside then block
       })
       .catch((error) => {
-        console.error(error);
+        handleError(error);
+        setLoading(false); // Move setLoading inside catch block
       });
   }
 
   function handleLogin(values: z.infer<typeof loginFormSchema>) {
     setLoading(true);
-    // Send POST request to server
     fetch("http://localhost:4875/auth/login", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     })
-      .then((response) => {
-        if (!response.ok) {
-          return response.json().then((data) => {
-            toast({
-              variant: "destructive",
-              title: "Failed to login ❌",
-              description: `${data}`,
-            });
-            setError(data); // Display the error message
-            throw new Error("Failed to login user");
-          });
-        }
-        return response.json();
-      })
+      .then(handleResponse)
       .then((data) => {
-        toast({
-          title: "Logged In Successfully ✅",
-        });
-        // Set token in local storage
-        localStorage.setItem("token", data.token);
-        // Redirect to home page
-        window.location.replace("/home");
+        toast({ title: "Logged In Successfully ✅" });
+        setCookiesAndRedirect(data);
+        setLoading(false); // Move setLoading inside then block
       })
       .catch((error) => {
-        console.error(error);
+        handleError(error);
+        setLoading(false); // Move setLoading inside catch block
       });
+  }
+
+  function setCookiesAndRedirect(data: any) {
+    const currentDate = new Date();
+    const expirationDate = new Date(currentDate);
+    expirationDate.setDate(currentDate.getDate() + 3);
+    console.log(data);
+    console.log("setting cookies!");
+    setCookie("token", data.token, { sameSite: true, expires: expirationDate });
+    setCookie("username", data.user_username, { sameSite: true, expires: expirationDate });
+    setCookie("email", data.user_email, { sameSite: true, expires: expirationDate });
+    window.location.replace("/home");
+  }
+
+  function handleError(error: any) {
+    console.error(error);
+    setError(error.message || "An error occurred");
+    toast({ variant: "destructive", title: "Operation failed ❌", description: error.message || "An error occurred" });
+    setLoading(false);
   }
 
   return (

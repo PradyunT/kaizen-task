@@ -1,8 +1,11 @@
+"use client";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import Navbar from "@/components/navbar";
 import "./globals.css";
+import { hasCookie } from "cookies-next";
+import { useEffect } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
 

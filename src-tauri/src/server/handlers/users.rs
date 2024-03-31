@@ -14,7 +14,7 @@ use chrono::{ Duration, Utc }; // Import chrono modules for date and time operat
 use jwt_compact::{ prelude::*, alg::{ Hs256, Hs256Key } }; // Import jwt_compact modules for JWT token handling
 
 /// Represents the user data received from the client during registration.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, sqlx::FromRow)]
 struct RegisterUser {
     username: String, // User's username
     email: String, // User's email
@@ -68,7 +68,9 @@ pub async fn register(
     // Send OK response with token
     let result = generate_token();
     if let Ok(token) = result {
-        HttpResponse::Ok().json(json!({"message": "User registered successfully", "token": token}))
+        HttpResponse::Ok().json(
+            json!({"message": "User registered successfully", "token": token, "user_email": user.email, "user_username": user.username})
+        )
     } else {
         HttpResponse::InternalServerError().json("Failed to generate token")
     }
@@ -86,7 +88,7 @@ async fn login(data: web::Data<server::TauriAppState>, user: web::Json<LoginUser
 
     // Get user's hashed password from the database
     let result = sqlx
-        ::query_as::<_, LoginUser>("SELECT * FROM users WHERE email = $1")
+        ::query_as::<_, RegisterUser>("SELECT * FROM users WHERE email = $1")
         .bind(email)
         .fetch_optional(pool).await;
 
@@ -102,7 +104,7 @@ async fn login(data: web::Data<server::TauriAppState>, user: web::Json<LoginUser
                     let result = generate_token();
                     if let Ok(token) = result {
                         HttpResponse::Ok().json(
-                            json!({"message": "You are now logged in", "token": token})
+                            json!({"message": "You are now logged in", "token": token, "user_email": login_user.email, "user_username": login_user.username})
                         )
                     } else {
                         HttpResponse::InternalServerError().json("Failed to generate token")
