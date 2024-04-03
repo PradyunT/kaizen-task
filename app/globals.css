@@ -37,6 +37,7 @@
 
   .dark {
     --background: 225, 83.33%, 4.71%;
+    --background-lighter: 225, 83.33%, 30%;
     --background-secondary: 218.57, 12.5%, 21.96%;
     --foreground: 210 40% 98%;
 
@@ -55,7 +56,7 @@
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 225, 83.33%, 8%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;

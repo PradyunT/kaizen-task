@@ -55,6 +55,7 @@ export default function AuthPage() {
   }
 
   function handleRegister(values: z.infer<typeof registerFormSchema>) {
+    toast({ title: "Logging in... 🔃" });
     setLoading(true);
     fetch("http://localhost:4875/auth/register", {
       method: "POST",
@@ -63,7 +64,6 @@ export default function AuthPage() {
     })
       .then(handleResponse)
       .then((data) => {
-        toast({ title: "Registered Successfully ✅" });
         setCookiesAndRedirect(data);
         setLoading(false); // Move setLoading inside then block
       })
@@ -74,6 +74,7 @@ export default function AuthPage() {
   }
 
   function handleLogin(values: z.infer<typeof loginFormSchema>) {
+    toast({ title: "Logging in... 🔃" });
     setLoading(true);
     fetch("http://localhost:4875/auth/login", {
       method: "POST",
@@ -82,7 +83,6 @@ export default function AuthPage() {
     })
       .then(handleResponse)
       .then((data) => {
-        toast({ title: "Logged In Successfully ✅" });
         setCookiesAndRedirect(data);
         setLoading(false); // Move setLoading inside then block
       })
@@ -145,7 +145,7 @@ export default function AuthPage() {
                     <FormItem>
                       <FormLabel>Password</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input type="password" {...field} />
                       </FormControl>
                       <FormDescription>Your password.</FormDescription>
                       <FormMessage />
@@ -200,7 +200,7 @@ export default function AuthPage() {
                     <FormItem>
                       <FormLabel>Password</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input type="password" {...field} />
                       </FormControl>
                       <FormDescription>Your password.</FormDescription>
                       <FormMessage />
