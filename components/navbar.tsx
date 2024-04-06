@@ -13,9 +13,6 @@ const Navbar = () => {
 
   useEffect(() => {
     const getData = () => {
-      console.log("Navbar is retrieving data");
-      const currentPath = window.location.pathname;
-      console.log("Current path: " + currentPath);
       let username = getCookie("username");
       const email = getCookie("email");
 

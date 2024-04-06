@@ -11,64 +11,52 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
+import { getCookie } from "cookies-next";
+import { useToast } from "@/components/ui/use-toast";
+import { format } from "date-fns";
 
 const formSchema = z.object({
   title: z.string().min(2).max(50),
   description: z.string().min(2),
   date: z.date(),
-  duration: z.string().regex(/^\d+$/).min(1),
+  duration: z.string().regex(/^\d+$/).min(1).optional(),
+  priority: z.number().optional(),
 });
 
 interface Task {
   id: string;
+  user_id: string;
   checked: boolean;
   title: string;
   description: string;
   date?: Date;
-  duration?: string;
+  duration?: number;
   priority?: number;
 }
 
 const TodoPage = () => {
   const [todo, setTodo] = useState<Task[]>([]); // Updated useState declaration
   const [popout, setPopout] = useState(false);
+  const { toast } = useToast();
 
   const loadTodo = () => {
     // TODO: Make GET request to server and get user's todo list
     // Example hardcoded todo data
-    const todoData: Task[] = [
-      {
-        id: "ijaofd897",
-        checked: false,
-        title: "Code this project asdadfsdfsdf",
-        description:
-          "I was part of something special. Yes, Yes, without the oops! Checkmate... What do they got in there? King Kong?",
-        date: new Date(),
-        duration: new Date().getMinutes().toLocaleString(),
-        priority: 1,
-      },
-      {
-        id: "ia3ofd897",
-        checked: true,
-        title: "title 2",
-        description: "description 2",
-        date: new Date(),
-        duration: new Date().getMinutes().toLocaleString(),
-        priority: 1,
-      },
-    ];
-    setTodo(todoData);
+    fetch("http://localhost:4875/tasks")
+      .then(handleResponse)
+      .then((data) => setTodo(data))
+      .catch((error) => handleError(error));
   };
+
+  useEffect(() => {
+    loadTodo();
+  }, []);
 
   const handleCheck = (id: string) => {
     const updatedTodo: Task[] = todo.map((task) => (task.id === id ? { ...task, checked: !task.checked } : task));
     // TODO Update task serverside and refresh
     setTodo(updatedTodo);
   };
-
-  useEffect(() => {
-    loadTodo();
-  }, []);
 
   const addTaskForm = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -77,12 +65,44 @@ const TodoPage = () => {
       description: "",
       date: new Date(),
       duration: "",
+      priority: 1, // Default priority added
     },
   });
 
-  // 2. Define a submit handler.
-  function onSubmitAddTask(values: z.infer<typeof formSchema>) {
-    console.log(values);
+  async function handleAddTask(values: z.infer<typeof formSchema>) {
+    toast({ title: "Adding task..." });
+    let token = getCookie("token");
+    let email = getCookie("email");
+    console.log(email);
+
+    // Adjusting the request body to match the expected Task struct on the server
+    const requestBody = {
+      ...values,
+      user_email: email,
+      date: values.date.toISOString().slice(0, 10), // Ensuring date is in ISO string format
+      duration: parseInt(values.duration || "-1"), // Ensuring duration is an integer
+      priority: values.priority || 1, // Ensuring priority is set, defaulting to 1
+    };
+
+    await fetch("http://localhost:4875/tasks/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(requestBody),
+    })
+      .then(handleResponse)
+      .then((data) => {
+        // Handle success
+        toast({
+          title: "Task added successfully ✅",
+        });
+      })
+      .catch((error) => handleError(error));
+
+    // Refresh the todo list
+    loadTodo();
   }
 
   function formatDate(inputDate: Date): String {
@@ -93,6 +113,19 @@ const TodoPage = () => {
     } else {
       return inputDate.getDate().toLocaleString();
     }
+  }
+
+  function handleResponse(response: Response) {
+    return response.ok
+      ? response.json()
+      : response.json().then((data) => {
+          throw new Error(data);
+        });
+  }
+
+  function handleError(error: any) {
+    console.error(error);
+    toast({ variant: "destructive", title: "Operation failed ❌", description: error.message || "An error occurred" });
   }
 
   const Task = ({ id, checked, title, description, date, duration, priority }: Task) => {
@@ -129,7 +162,7 @@ const TodoPage = () => {
       {popout && (
         <div>
           <Form {...addTaskForm}>
-            <form onSubmit={addTaskForm.handleSubmit(onSubmitAddTask)} className="space-y-2">
+            <form onSubmit={addTaskForm.handleSubmit(handleAddTask)} className="space-y-2">
               <FormField
                 control={addTaskForm.control}
                 name="title"
@@ -178,7 +211,7 @@ const TodoPage = () => {
                             <Button
                               variant={"outline"}
                               className={cn("min-w-[240px] pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                              {field.value ? <p>{field.value.toLocaleString()}</p> : <span>Pick a date</span>}
+                              {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                             </Button>
                           </FormControl>

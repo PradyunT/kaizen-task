@@ -115,9 +115,13 @@ export default function AuthPage() {
     <div className="flex min-h-screen flex-col items-center justify-center p-24">
       <h1 className="h2 border-b pb-2 mb-4">Login</h1>
       <Tabs defaultValue="login" className="w-[400px]">
-        <TabsList>
-          <TabsTrigger value="login">Login</TabsTrigger>
-          <TabsTrigger value="register">Register</TabsTrigger>
+        <TabsList className="w-[100%]">
+          <TabsTrigger value="login" className="w-[50%]">
+            Login
+          </TabsTrigger>
+          <TabsTrigger value="register" className="w-[50%]">
+            Register
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="login">
           <>

@@ -47,10 +47,11 @@ pub async fn init(app: AppHandle) -> Result<(), std::io::Error> {
 
         // Create the Actix web application
         App::new()
-            .wrap(cors) // Wrap the application with CORS middleware
+            .wrap(cors) // Wrap application with CORS middleware
             .app_data(tauri_app.clone()) // Pass Tauri app state to handler routes
-            .service(handlers::users::register) // Register user registration handler
-            .service(handlers::users::login) // Register user login handler
+            .service(handlers::users::register) // Handlers
+            .service(handlers::users::login)
+            .service(handlers::tasks::create_task)
     })
         .bind(("127.0.0.1", 4875))
         ? // Bind server to specified IP address and port

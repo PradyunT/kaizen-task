@@ -1,17 +1,18 @@
-// Import necessary modules and crates
-use std::env; // Import environment module
-use crate::server; // Import server module
-use anyhow; // Import anyhow crate for error handling
-use serde_json::json; // Import serde_json crate for JSON serialization
-use actix_web::{ post, web, HttpResponse }; // Import actix_web modules for handling HTTP requests
-use serde::{ Serialize, Deserialize }; // Import serde modules for serialization and deserialization
-use argon2::{ // Import argon2 crate for password hashing
-    password_hash::{ rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString }, // Import password hashing related structs and traits
-    Argon2, // Import Argon2 struct for password hashing
+use std::env;
+use crate::server;
+use anyhow;
+use serde_json::json;
+use actix_web::{ post, web, HttpResponse };
+use serde::Deserialize;
+use argon2::{
+    password_hash::{ rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString },
+    Argon2,
 };
-use sqlx::{ Pool, Postgres }; // Import sqlx modules for PostgreSQL interaction
-use chrono::{ Duration, Utc }; // Import chrono modules for date and time operations
-use jwt_compact::{ prelude::*, alg::{ Hs256, Hs256Key } }; // Import jwt_compact modules for JWT token handling
+use sqlx::{ Pool, Postgres };
+use chrono::{ Duration, Utc };
+use jwt_compact::{ prelude::*, alg::{ Hs256, Hs256Key } };
+
+use super::auth::CustomClaims;
 
 /// Represents the user data received from the client during registration.
 #[derive(Deserialize, Debug, sqlx::FromRow)]
@@ -26,13 +27,6 @@ struct RegisterUser {
 struct LoginUser {
     email: String, // User's email
     password: String, // User's password
-}
-
-/// Custom claims encoded in the token.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct CustomClaims {
-    #[serde(rename = "email")]
-    email: String, // User's email
 }
 
 /// Endpoint for registering a new user.
@@ -53,7 +47,16 @@ pub async fn register(
     let hashed_password = hash_user_password(password);
 
     // Attempt to store the user in the database
-    if let Err(err) = store_user(username, email, &hashed_password, pool).await {
+    let result = sqlx
+        ::query("INSERT INTO users(username, email, password)
+            VALUES($1, $2, $3)")
+        .bind(username)
+        .bind(email)
+        .bind(hashed_password)
+        .execute(pool).await;
+
+    // Handle error case
+    if let Err(err) = result {
         let error_message: String;
         let err_string = format!("{}", { err });
         if err_string.contains("duplicate key value") {
@@ -144,42 +147,6 @@ fn generate_token() -> Result<String, anyhow::Error> {
         .set_not_before(Utc::now()); // Set token not before time
     let token = Hs256.token(&header, &claims, &key)?; // Generate token
     Ok(token) // Return generated token
-}
-
-/// Function to verify a JWT token.
-fn verify_token(token_string: String) -> Result<Token<CustomClaims>, anyhow::Error> {
-    // Load secret key from environment variable
-    let secret = env::var("TOKENSECRET").expect("TOKENSECRET not set");
-    let key = Hs256Key::new(secret.as_bytes());
-    // Choose time-related options for token creation / validation.
-    let time_options = TimeOptions::default();
-    // Parse the token.
-    let token = UntrustedToken::new(&token_string)?;
-    // Before verifying the token, we might find the key which has signed the token
-    // using the `Header.key_id` field.
-    assert_eq!(token.header().key_id.as_deref(), Some("my-key"));
-    // Validate the token integrity.
-    let token: Token<CustomClaims> = Hs256.validator(&key).validate(&token)?;
-    // Validate additional conditions.
-    Ok(token)
-}
-/// Asynchronously stores a new user in the database.
-// TODO move the function's logic back into register user
-async fn store_user(
-    username: &str,
-    email: &str,
-    hashed_password: &str,
-    pool: &Pool<Postgres>
-) -> anyhow::Result<()> {
-    // Execute SQL query to insert user into the database
-    sqlx
-        ::query("INSERT INTO users(username, email, password)
-            VALUES($1, $2, $3)")
-        .bind(username)
-        .bind(email)
-        .bind(hashed_password)
-        .execute(pool).await?;
-    Ok(())
 }
 
 /// Hashes the user's password using Argon2 algorithm.
