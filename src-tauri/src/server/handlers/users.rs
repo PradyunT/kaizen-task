@@ -8,7 +8,6 @@ use argon2::{
     password_hash::{ rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString },
     Argon2,
 };
-use sqlx::{ Pool, Postgres };
 use chrono::{ Duration, Utc };
 use jwt_compact::{ prelude::*, alg::{ Hs256, Hs256Key } };
 
@@ -40,7 +39,7 @@ pub async fn register(
 
     // Extract user data from the JSON payload
     let username = &user.username;
-    let email = &user.email;
+    let email = &user.email.to_lowercase();
     let password = user.password.clone();
 
     // Hash the user's password
@@ -143,7 +142,7 @@ fn generate_token() -> Result<String, anyhow::Error> {
     // Create a token.
     let header = Header::empty().with_key_id("my-key"); // Create header with key ID
     let claims = Claims::new(CustomClaims { email: "example.email@email.com".to_owned() }) // Create claims with email
-        .set_duration_and_issuance(&time_options, Duration::hours(1)) // Set token expiration time
+        .set_duration_and_issuance(&time_options, Duration::try_hours(1).unwrap()) // Set token expiration time
         .set_not_before(Utc::now()); // Set token not before time
     let token = Hs256.token(&header, &claims, &key)?; // Generate token
     Ok(token) // Return generated token

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CalendarIcon, Plus, PlusIcon } from "lucide-react";
+import { CalendarIcon, Plus, PlusIcon, TimerIcon, TrashIcon } from "lucide-react";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -24,12 +24,12 @@ const formSchema = z.object({
 });
 
 interface Task {
-  id: string;
-  user_id: string;
+  task_id: number;
+  user_email: string;
   checked: boolean;
   title: string;
   description: string;
-  date?: Date;
+  date?: string;
   duration?: number;
   priority?: number;
 }
@@ -40,22 +40,34 @@ const TodoPage = () => {
   const { toast } = useToast();
 
   const loadTodo = () => {
-    // TODO: Make GET request to server and get user's todo list
-    // Example hardcoded todo data
-    fetch("http://localhost:4875/tasks")
+    // Get user's todo list
+    let email = getCookie("email");
+    let token = getCookie("token");
+
+    fetch(`http://localhost:4875/tasks/${email}`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    })
       .then(handleResponse)
-      .then((data) => setTodo(data))
+      .then((data) => {
+        console.log(data);
+        setTodo(data);
+      })
       .catch((error) => handleError(error));
   };
 
+  // Load todo list upon page load in
   useEffect(() => {
     loadTodo();
   }, []);
 
-  const handleCheck = (id: string) => {
-    const updatedTodo: Task[] = todo.map((task) => (task.id === id ? { ...task, checked: !task.checked } : task));
+  const handleCheck = (id: number) => {
+    // TODO implement checking logic
     // TODO Update task serverside and refresh
-    setTodo(updatedTodo);
+    // setTodo(updatedTodo);
+    // loadTodo();
   };
 
   const addTaskForm = useForm<z.infer<typeof formSchema>>({
@@ -71,17 +83,21 @@ const TodoPage = () => {
 
   async function handleAddTask(values: z.infer<typeof formSchema>) {
     toast({ title: "Adding task..." });
-    let token = getCookie("token");
+    const token = getCookie("token");
     let email = getCookie("email");
-    console.log(email);
 
-    // Adjusting the request body to match the expected Task struct on the server
+    if (!token) {
+      toast({ title: "You must be logged in to manage tasks ❌" });
+      return;
+    }
+
+    // Prepare body for request to server
     const requestBody = {
       ...values,
       user_email: email,
-      date: values.date.toISOString().slice(0, 10), // Ensuring date is in ISO string format
-      duration: parseInt(values.duration || "-1"), // Ensuring duration is an integer
-      priority: values.priority || 1, // Ensuring priority is set, defaulting to 1
+      date: values.date.toISOString(),
+      duration: parseInt(values.duration || "-1"),
+      priority: values.priority || 1,
     };
 
     await fetch("http://localhost:4875/tasks/create", {
@@ -93,25 +109,26 @@ const TodoPage = () => {
       body: JSON.stringify(requestBody),
     })
       .then(handleResponse)
-      .then((data) => {
+      .then(() => {
         // Handle success
         toast({
           title: "Task added successfully ✅",
         });
+        // Refresh the todo list
+        loadTodo();
       })
       .catch((error) => handleError(error));
-
-    // Refresh the todo list
-    loadTodo();
   }
 
-  function formatDate(inputDate: Date): String {
+  function formatDate(inputDate: string): string {
     // If date falls within today
     let today = new Date();
-    if (inputDate.getDay() == today.getDay()) {
+    let taskDate = new Date(inputDate);
+
+    if (taskDate.getDay() == today.getDay()) {
       return "Today";
     } else {
-      return inputDate.getDate().toLocaleString();
+      return format(taskDate, "PPP");
     }
   }
 
@@ -128,18 +145,57 @@ const TodoPage = () => {
     toast({ variant: "destructive", title: "Operation failed ❌", description: error.message || "An error occurred" });
   }
 
-  const Task = ({ id, checked, title, description, date, duration, priority }: Task) => {
+  async function handleDeleteTask(id: number) {
+    toast({ title: "Deleting task... 🔃" });
+    const token = getCookie("token");
+
+    if (!token) {
+      toast({ title: "You must be logged in to manage tasks ❌" });
+      return;
+    }
+
+    await fetch(`http://localhost:4875/tasks/delete/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(handleResponse)
+      .then(() => {
+        toast({
+          title: "Task deleted successfully ✅",
+        });
+        // Refresh the todo list
+        loadTodo();
+      })
+      .catch((error) => handleError(error));
+  }
+
+  const Task = ({ task_id, checked, title, description, date, duration, priority }: Task) => {
     // Function body
     return (
       <div className="border-2 rounded-sm border-gray-400 flex flex-col sm:flex-row gap-3 p-3 my-1">
-        <Checkbox id={id} defaultChecked={checked} className="my-auto" onCheckedChange={() => handleCheck(id)} />
+        <Checkbox
+          id={task_id.toString()}
+          defaultChecked={checked}
+          className="my-auto"
+          onCheckedChange={() => handleCheck(task_id)}
+        />
         <div className="sm:flex-1">
           <h4 className={`h4 ${checked && "line-through"}`}>{title}</h4>
           <p className={`p ${checked && "line-through"}`}>{description}</p>
         </div>
-        <p>{date && formatDate(date)}</p>
-        <p>{duration} minutes</p>
-        <p>{priority && `P${priority}`}</p>
+        <p>{date ? formatDate(date) : "No date"}</p>
+        <p>{duration ? `${duration} minutes` : "No duration"}</p>
+        <p>{priority ? `P${priority}` : "No priority"}</p>
+        {duration && (
+          <Button>
+            <TimerIcon />
+          </Button>
+        )}
+        <Button>
+          <TrashIcon onClick={() => handleDeleteTask(task_id)} />
+        </Button>
       </div>
     );
   };
@@ -148,16 +204,16 @@ const TodoPage = () => {
     <div>
       <h2 className="h2 mx-auto mb-4">To-do List</h2>
       {/* Todo list */}
-      <div>
+      <div className="flex flex-col gap-1">
         {todo.map((task, index) => (
           <Task key={index} {...task} /> // Render each task component
         ))}
+        {!popout && (
+          <Button onClick={() => setPopout(true)}>
+            <PlusIcon />
+          </Button>
+        )}
       </div>
-      {!popout && (
-        <Button onClick={() => setPopout(true)}>
-          <PlusIcon />
-        </Button>
-      )}
       {/* Add tasks */}
       {popout && (
         <div>

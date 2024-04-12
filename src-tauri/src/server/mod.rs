@@ -40,7 +40,7 @@ pub async fn init(app: AppHandle) -> Result<(), std::io::Error> {
         // Configure CORS middleware
         let cors = Cors::default()
             .allowed_origin("http://localhost:3000") // Allow requests from localhost:3000
-            .allowed_methods(vec!["GET", "POST"]) // Allow GET and POST methods
+            .allowed_methods(vec!["GET", "POST", "DELETE"]) // Allow GET and POST methods
             .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE]) // Allow specified headers
             .supports_credentials() // Support credentials (cookies, authorization headers)
             .max_age(3600); // Set maximum age for preflight response
@@ -52,6 +52,8 @@ pub async fn init(app: AppHandle) -> Result<(), std::io::Error> {
             .service(handlers::users::register) // Handlers
             .service(handlers::users::login)
             .service(handlers::tasks::create_task)
+            .service(handlers::tasks::get_tasks)
+            .service(handlers::tasks::delete_task)
     })
         .bind(("127.0.0.1", 4875))
         ? // Bind server to specified IP address and port
