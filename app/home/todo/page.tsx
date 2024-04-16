@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CalendarIcon, PlusIcon, TimerIcon, TrashIcon } from "lucide-react";
+import { CalendarIcon, PlusIcon, TimerIcon, CheckIcon } from "lucide-react";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -40,10 +40,17 @@ const TodoPage = () => {
   const [todo, setTodo] = useState<Task[]>([]); // Updated useState declaration
   const [popout, setPopout] = useState(false);
   const { toast } = useToast();
-  const [timer, setTimer] = useState<{ time: number; initialTime: number; isActive: boolean; taskId: number }>({
+  const [timer, setTimer] = useState<{
+    time: number;
+    initialTime: number;
+    isActive: boolean;
+    isFinished: boolean;
+    taskId: number;
+  }>({
     time: 0,
     initialTime: 0,
     isActive: false,
+    isFinished: false,
     taskId: -1,
   });
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -182,13 +189,13 @@ const TodoPage = () => {
   }
 
   function handleStartTimer(task_id: number, duration: number) {
-    setTimer({ time: duration * 60, initialTime: duration * 60, isActive: true, taskId: task_id });
+    setTimer({ time: duration * 60, initialTime: duration * 60, isActive: true, isFinished: false, taskId: task_id });
     intervalRef.current = setInterval(() => {
       setTimer((prevTimer) => {
         if (prevTimer.time <= 1) {
           clearInterval(intervalRef.current!);
           toast({ title: "Time's up!", description: `Timer for task ${task_id} has finished.` });
-          return { ...prevTimer, isActive: false, time: 0 };
+          return { ...prevTimer, isFinished: true, time: 0 };
         }
         return { ...prevTimer, time: prevTimer.time - 1 };
       });
@@ -231,14 +238,13 @@ const TodoPage = () => {
         <p>{date ? formatDate(date) : "No date"}</p>
         <p>{duration ? `${duration} minutes` : "No duration"}</p>
         <p>{priority ? `P${priority}` : "No priority"}</p>
-        <p>{timer.isActive && timer.taskId === task_id ? `Time left: ${Math.floor(timer.time / 60)}:${timer.time % 60}` : ""}</p>
         {duration && (
           <Button onClick={() => handleStartTimer(task_id, duration)}>
             <TimerIcon />
           </Button>
         )}
-        <Button>
-          <TrashIcon onClick={() => handleDeleteTask(task_id)} />
+        <Button onClick={() => handleDeleteTask(task_id)}>
+          <CheckIcon />
         </Button>
       </div>
     );
@@ -265,11 +271,26 @@ const TodoPage = () => {
             <DialogHeader>
               <DialogTitle>Task Timer</DialogTitle>
               <DialogDescription>
-                Time left: {Math.floor(timer.time / 60)}:{timer.time % 60}
+                <p className="p mb-1">
+                  Time left: {Math.floor(timer.time / 60)}:{timer.time % 60}
+                </p>
                 <Progress value={(1 - timer.time / timer.initialTime) * 100} />
               </DialogDescription>
             </DialogHeader>
-            <Button onClick={handleStopTimer}>Stop Timer</Button>
+            {timer.isFinished ? (
+              <>
+                <Button
+                  onClick={() => {
+                    handleStopTimer();
+                    handleDeleteTask(timer.taskId);
+                  }}>
+                  Mark Completed <CheckIcon className="ml-2" />
+                </Button>
+                <Button onClick={() => handleStopTimer()}>Exit</Button>
+              </>
+            ) : (
+              <Button onClick={handleStopTimer}>Stop Timer</Button>
+            )}
           </DialogContent>
         </Dialog>
       )}
