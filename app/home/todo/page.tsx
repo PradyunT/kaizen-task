@@ -1,14 +1,16 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CalendarIcon, Plus, PlusIcon, TimerIcon, TrashIcon } from "lucide-react";
+import { CalendarIcon, PlusIcon, TimerIcon, TrashIcon } from "lucide-react";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { getCookie } from "cookies-next";
@@ -38,6 +40,13 @@ const TodoPage = () => {
   const [todo, setTodo] = useState<Task[]>([]); // Updated useState declaration
   const [popout, setPopout] = useState(false);
   const { toast } = useToast();
+  const [timer, setTimer] = useState<{ time: number; initialTime: number; isActive: boolean; taskId: number }>({
+    time: 0,
+    initialTime: 0,
+    isActive: false,
+    taskId: -1,
+  });
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadTodo = () => {
     // Get user's todo list
@@ -57,11 +66,6 @@ const TodoPage = () => {
       })
       .catch((error) => handleError(error));
   };
-
-  // Load todo list upon page load in
-  useEffect(() => {
-    loadTodo();
-  }, []);
 
   const handleCheck = (id: number) => {
     // TODO implement checking logic
@@ -160,7 +164,13 @@ const TodoPage = () => {
         Authorization: `Bearer ${token}`,
       },
     })
-      .then(handleResponse)
+      .then((response) => {
+        return response.ok
+          ? response
+          : response.json().then((data) => {
+              throw new Error(data);
+            });
+      })
       .then(() => {
         toast({
           title: "Task deleted successfully ✅",
@@ -171,8 +181,41 @@ const TodoPage = () => {
       .catch((error) => handleError(error));
   }
 
+  function handleStartTimer(task_id: number, duration: number) {
+    setTimer({ time: duration * 60, initialTime: duration * 60, isActive: true, taskId: task_id });
+    intervalRef.current = setInterval(() => {
+      setTimer((prevTimer) => {
+        if (prevTimer.time <= 1) {
+          clearInterval(intervalRef.current!);
+          toast({ title: "Time's up!", description: `Timer for task ${task_id} has finished.` });
+          return { ...prevTimer, isActive: false, time: 0 };
+        }
+        return { ...prevTimer, time: prevTimer.time - 1 };
+      });
+    }, 1000);
+  }
+
+  function handleStopTimer() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    setTimer({ ...timer, isActive: false, time: 0, taskId: -1 });
+  }
+
+  // Load todo list upon page load in
+  useEffect(() => {
+    loadTodo();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
   const Task = ({ task_id, checked, title, description, date, duration, priority }: Task) => {
-    // Function body
     return (
       <div className="border-2 rounded-sm border-gray-400 flex flex-col sm:flex-row gap-3 p-3 my-1">
         <Checkbox
@@ -188,8 +231,9 @@ const TodoPage = () => {
         <p>{date ? formatDate(date) : "No date"}</p>
         <p>{duration ? `${duration} minutes` : "No duration"}</p>
         <p>{priority ? `P${priority}` : "No priority"}</p>
+        <p>{timer.isActive && timer.taskId === task_id ? `Time left: ${Math.floor(timer.time / 60)}:${timer.time % 60}` : ""}</p>
         {duration && (
-          <Button>
+          <Button onClick={() => handleStartTimer(task_id, duration)}>
             <TimerIcon />
           </Button>
         )}
@@ -214,6 +258,21 @@ const TodoPage = () => {
           </Button>
         )}
       </div>
+      {/* Task timer dialog */}
+      {timer.isActive && (
+        <Dialog open={timer.isActive} onOpenChange={(isOpen) => !isOpen && handleStopTimer()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Task Timer</DialogTitle>
+              <DialogDescription>
+                Time left: {Math.floor(timer.time / 60)}:{timer.time % 60}
+                <Progress value={(1 - timer.time / timer.initialTime) * 100} />
+              </DialogDescription>
+            </DialogHeader>
+            <Button onClick={handleStopTimer}>Stop Timer</Button>
+          </DialogContent>
+        </Dialog>
+      )}
       {/* Add tasks */}
       {popout && (
         <div>

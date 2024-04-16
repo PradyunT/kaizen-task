@@ -124,10 +124,9 @@ pub async fn create_task(
 #[delete("/tasks/delete/{task_id}")]
 pub async fn delete_task(
     data: web::Data<server::TauriAppState>,
-    req: HttpRequest, // Add HttpRequest to parameters
+    req: HttpRequest,
     path: web::Path<String>
 ) -> HttpResponse {
-    // Use the new function for token verification
     if let Err(response) = verify_request_token(&req).await {
         return response;
     }
@@ -136,7 +135,7 @@ pub async fn delete_task(
     let pool = &data.pool;
 
     let result = pool.execute(
-        sqlx::query("DELETE * FROM tasks WHERE task_id = $1").bind(task_id as i32)
+        sqlx::query("DELETE FROM tasks WHERE task_id = $1").bind(task_id as i32)
     ).await;
 
     match result {
