@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CalendarIcon, PlusIcon, TimerIcon, CheckIcon } from "lucide-react";
+import { CalendarIcon, PlusIcon, TimerIcon, CheckIcon, FlagIcon } from "lucide-react";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -20,7 +21,7 @@ import { format } from "date-fns";
 const formSchema = z.object({
   title: z.string().min(2).max(50),
   description: z.string().min(2),
-  date: z.date(),
+  date: z.date().optional(),
   duration: z.string().regex(/^\d+$/).min(1).optional(),
   priority: z.number().optional(),
 });
@@ -32,6 +33,7 @@ interface Task {
   title: string;
   description: string;
   date?: string;
+  isLate?: boolean;
   duration?: number;
   priority?: number;
 }
@@ -68,8 +70,17 @@ const TodoPage = () => {
     })
       .then(handleResponse)
       .then((data) => {
-        console.log(data);
-        setTodo(data);
+        // Update isLate if the task is late
+        let today = new Date();
+        let updatedData = data.map((task: Task) => {
+          let taskDate = task.date ? new Date(task.date) : null;
+          return {
+            ...task,
+            isLate: taskDate && taskDate < today,
+          };
+        });
+
+        setTodo(updatedData);
       })
       .catch((error) => handleError(error));
   };
@@ -86,9 +97,7 @@ const TodoPage = () => {
     defaultValues: {
       title: "",
       description: "",
-      date: new Date(),
-      duration: "",
-      priority: 1, // Default priority added
+      priority: 1,
     },
   });
 
@@ -106,8 +115,8 @@ const TodoPage = () => {
     const requestBody = {
       ...values,
       user_email: email,
-      date: values.date.toISOString(),
-      duration: parseInt(values.duration || "-1"),
+      date: values.date ? values.date.toISOString() : null,
+      duration: values.duration ? parseInt(values.duration) : null,
       priority: values.priority || 1,
     };
 
@@ -222,7 +231,7 @@ const TodoPage = () => {
     };
   }, []);
 
-  const Task = ({ task_id, checked, title, description, date, duration, priority }: Task) => {
+  const Task = ({ task_id, checked, title, description, date, duration, isLate, priority }: Task) => {
     return (
       <div className="border-2 rounded-sm border-gray-400 flex flex-col sm:flex-row gap-3 p-3 my-1">
         <Checkbox
@@ -235,9 +244,12 @@ const TodoPage = () => {
           <h4 className={`h4 ${checked && "line-through"}`}>{title}</h4>
           <p className={`p ${checked && "line-through"}`}>{description}</p>
         </div>
-        <p>{date ? formatDate(date) : "No date"}</p>
+        <p className={`${isLate && "text-red-400"}`}>{date ? formatDate(date) : "No date"}</p>
         <p>{duration ? `${duration} minutes` : "No duration"}</p>
-        <p>{priority ? `P${priority}` : "No priority"}</p>
+        <p>
+          <FlagIcon className="inline mr-1" />
+          {priority ? `P${priority}` : "No priority"}
+        </p>
         {duration && (
           <Button onClick={() => handleStartTimer(task_id, duration)}>
             <TimerIcon />
@@ -256,7 +268,7 @@ const TodoPage = () => {
       {/* Todo list */}
       <div className="flex flex-col gap-1">
         {todo.map((task, index) => (
-          <Task key={index} {...task} /> // Render each task component
+          <Task key={index} {...task} />
         ))}
         {!popout && (
           <Button onClick={() => setPopout(true)}>
@@ -278,16 +290,13 @@ const TodoPage = () => {
               </DialogDescription>
             </DialogHeader>
             {timer.isFinished ? (
-              <>
-                <Button
-                  onClick={() => {
-                    handleStopTimer();
-                    handleDeleteTask(timer.taskId);
-                  }}>
-                  Mark Completed <CheckIcon className="ml-2" />
-                </Button>
-                <Button onClick={() => handleStopTimer()}>Exit</Button>
-              </>
+              <Button
+                onClick={() => {
+                  handleStopTimer();
+                  handleDeleteTask(timer.taskId);
+                }}>
+                Mark Completed <CheckIcon className="ml-2" />
+              </Button>
             ) : (
               <Button onClick={handleStopTimer}>Stop Timer</Button>
             )}
